@@ -1,0 +1,21 @@
+{
+  "name": "mygame",
+  "version": "1.0.0",
+  "description": "基于 Cocos Creator 的网页游戏项目",
+  "main": "index.js",
+  "scripts": {
+    "build": "echo '请使用 Cocos Creator 编辑器进行构建'",
+    "dev": "echo '请使用 Cocos Creator 编辑器进行预览'",
+    "web:dev": "cd web-version && python -m http.server 8000 || python3 -m http.server 8000 || npx http-server -p 8000",
+    "web:open": "cd web-version && start index.html || open index.html || xdg-open index.html"
+  },
+  "keywords": [
+    "cocos",
+    "game",
+    "web"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}

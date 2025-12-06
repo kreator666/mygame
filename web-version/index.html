@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyGame - 网页游戏</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        #GameCanvas {
+            display: block;
+            margin: 0 auto;
+            border: 2px solid #333;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        #loading {
+            color: white;
+            text-align: center;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">正在加载游戏...</div>
+    <canvas id="GameCanvas"></canvas>
+    
+    <script>
+        // 游戏主入口 - 横向卷轴场景
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('GameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.width = 800;
+                this.height = 600;
+                this.score = 0;
+                this.isGameOver = false;
+                
+                // 卷轴场景设置
+                this.worldWidth = 5000;  // 世界宽度
+                this.camera = {
+                    x: 0,  // 相机位置（世界坐标）
+                    y: 0
+                };
+                this.cameraFollowZone = 150;  // 相机跟随区域（玩家超出此范围时相机开始移动）
+                
+                // 平台和障碍物
+                this.platforms = [];
+                this.initPlatforms();
+                
+                this.init();
+            }
+            
+            initPlatforms() {
+                // 创建一些平台来展示卷轴效果
+                const platformHeight = 30;
+                const groundY = this.height - 100;
+                
+                // 地面平台
+                for (let x = 0; x < this.worldWidth; x += 200) {
+                    this.platforms.push({
+                        x: x,
+                        y: groundY,
+                        width: 180,
+                        height: platformHeight,
+                        color: '#8B4513'
+                    });
+                }
+                
+                // 添加一些悬浮平台
+                const floatingPlatforms = [
+                    { x: 500, y: groundY - 150, width: 150, height: 20 },
+                    { x: 1200, y: groundY - 200, width: 200, height: 20 },
+                    { x: 2000, y: groundY - 100, width: 180, height: 20 },
+                    { x: 2800, y: groundY - 250, width: 150, height: 20 },
+                    { x: 3500, y: groundY - 150, width: 200, height: 20 },
+                    { x: 4200, y: groundY - 300, width: 180, height: 20 }
+                ];
+                
+                floatingPlatforms.forEach(plat => {
+                    this.platforms.push({
+                        x: plat.x,
+                        y: plat.y,
+                        width: plat.width,
+                        height: plat.height,
+                        color: '#654321'
+                    });
+                });
+            }
+            
+            init() {
+                // 设置画布大小
+                this.canvas.width = this.width;
+                this.canvas.height = this.height;
+                
+                // 隐藏加载提示
+                const loading = document.getElementById('loading');
+                if (loading) {
+                    loading.style.display = 'none';
+                }
+                
+                // 初始化玩家（世界坐标）
+                this.player = {
+                    worldX: 100,  // 世界坐标 X
+                    worldY: this.height - 150,  // 世界坐标 Y
+                    size: 20,
+                    speed: 5,
+                    color: '#4CAF50',
+                    velocityY: 0,  // 垂直速度（用于重力）
+                    onGround: false
+                };
+                
+                // 重力设置
+                this.gravity = 0.5;
+                this.jumpPower = -12;
+                
+                // 初始化按键状态
+                this.keys = {};
+                
+                // 绑定事件
+                this.bindEvents();
+                
+                // 开始游戏循环
+                this.gameLoop();
+            }
+            
+            bindEvents() {
+                // 键盘事件
+                const self = this;
+                document.addEventListener('keydown', function(e) {
+                    const key = e.key.toLowerCase();
+                    self.keys[key] = true;
+                    
+                    // 处理方向键
+                    if (key === 'arrowleft') self.keys['a'] = true;
+                    if (key === 'arrowright') self.keys['d'] = true;
+                    if (key === 'arrowup') self.keys['w'] = true;
+                    if (key === 'arrowdown') self.keys['s'] = true;
+                    
+                    // 跳跃（空格键或 W）
+                    if ((key === ' ' || key === 'w' || key === 'arrowup') && self.player.onGround) {
+                        self.player.velocityY = self.jumpPower;
+                        self.player.onGround = false;
+                    }
+                });
+                
+                document.addEventListener('keyup', function(e) {
+                    const key = e.key.toLowerCase();
+                    self.keys[key] = false;
+                    
+                    // 处理方向键
+                    if (key === 'arrowleft') self.keys['a'] = false;
+                    if (key === 'arrowright') self.keys['d'] = false;
+                    if (key === 'arrowup') self.keys['w'] = false;
+                    if (key === 'arrowdown') self.keys['s'] = false;
+                    
+                    // 重新开始
+                    if (key === 'r' && self.isGameOver) {
+                        location.reload();
+                    }
+                });
+            }
+            
+            // 检查碰撞
+            checkCollision(player, platform) {
+                return player.worldX + player.size > platform.x &&
+                       player.worldX - player.size < platform.x + platform.width &&
+                       player.worldY + player.size > platform.y &&
+                       player.worldY - player.size < platform.y + platform.height;
+            }
+            
+            update() {
+                if (this.isGameOver) return;
+                
+                // 更新玩家水平移动（世界坐标）
+                if (this.keys['a']) {
+                    this.player.worldX -= this.player.speed;
+                }
+                if (this.keys['d']) {
+                    this.player.worldX += this.player.speed;
+                }
+                
+                // 世界边界检测
+                this.player.worldX = Math.max(this.player.size, Math.min(this.worldWidth - this.player.size, this.player.worldX));
+                
+                // 应用重力
+                this.player.velocityY += this.gravity;
+                this.player.worldY += this.player.velocityY;
+                
+                // 检查平台碰撞
+                this.player.onGround = false;
+                for (let platform of this.platforms) {
+                    if (this.checkCollision(this.player, platform)) {
+                        // 从上方落在平台上
+                        if (this.player.velocityY > 0 && 
+                            this.player.worldY - this.player.size < platform.y) {
+                            this.player.worldY = platform.y - this.player.size;
+                            this.player.velocityY = 0;
+                            this.player.onGround = true;
+                        }
+                        // 从下方碰撞
+                        else if (this.player.velocityY < 0 && 
+                                 this.player.worldY + this.player.size > platform.y + platform.height) {
+                            this.player.worldY = platform.y + platform.height + this.player.size;
+                            this.player.velocityY = 0;
+                        }
+                    }
+                }
+                
+                // 防止掉出世界底部
+                if (this.player.worldY > this.height + 200) {
+                    this.player.worldY = this.height - 150;
+                    this.player.velocityY = 0;
+                    this.player.worldX = 100;
+                    this.camera.x = 0;
+                }
+                
+                // 更新相机位置（跟随玩家）
+                const playerScreenX = this.player.worldX - this.camera.x;
+                const centerX = this.width / 2;
+                
+                // 如果玩家超出跟随区域，移动相机
+                if (playerScreenX < centerX - this.cameraFollowZone) {
+                    this.camera.x = this.player.worldX - (centerX - this.cameraFollowZone);
+                } else if (playerScreenX > centerX + this.cameraFollowZone) {
+                    this.camera.x = this.player.worldX - (centerX + this.cameraFollowZone);
+                }
+                
+                // 限制相机范围
+                this.camera.x = Math.max(0, Math.min(this.worldWidth - this.width, this.camera.x));
+                
+                // 增加分数（基于移动距离）
+                this.score += 0.1;
+            }
+            
+            render() {
+                // 清空画布 - 天空渐变
+                const gradient = this.ctx.createLinearGradient(0, 0, 0, this.height);
+                gradient.addColorStop(0, '#87CEEB');
+                gradient.addColorStop(1, '#E0F6FF');
+                this.ctx.fillStyle = gradient;
+                this.ctx.fillRect(0, 0, this.width, this.height);
+                
+                // 保存上下文，准备应用相机变换
+                this.ctx.save();
+                this.ctx.translate(-this.camera.x, -this.camera.y);
+                
+                // 绘制网格背景（世界坐标）
+                this.ctx.strokeStyle = 'rgba(200, 200, 200, 0.2)';
+                this.ctx.lineWidth = 1;
+                const gridSize = 50;
+                const startX = Math.floor(this.camera.x / gridSize) * gridSize;
+                const endX = Math.ceil((this.camera.x + this.width) / gridSize) * gridSize;
+                
+                for (let x = startX; x <= endX; x += gridSize) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, 0);
+                    this.ctx.lineTo(x, this.height);
+                    this.ctx.stroke();
+                }
+                for (let y = 0; y < this.height; y += gridSize) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(startX, y);
+                    this.ctx.lineTo(endX, y);
+                    this.ctx.stroke();
+                }
+                
+                // 绘制平台
+                for (let platform of this.platforms) {
+                    // 只绘制在视野内的平台
+                    if (platform.x + platform.width > this.camera.x && 
+                        platform.x < this.camera.x + this.width) {
+                        this.ctx.fillStyle = platform.color;
+                        this.ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+                        
+                        // 平台边框
+                        this.ctx.strokeStyle = '#654321';
+                        this.ctx.lineWidth = 2;
+                        this.ctx.strokeRect(platform.x, platform.y, platform.width, platform.height);
+                    }
+                }
+                
+                // 绘制玩家（世界坐标转换为屏幕坐标）
+                const playerScreenX = this.player.worldX;
+                const playerScreenY = this.player.worldY;
+                
+                this.ctx.fillStyle = this.player.color;
+                this.ctx.beginPath();
+                this.ctx.arc(playerScreenX, playerScreenY, this.player.size, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                // 绘制玩家边框
+                this.ctx.strokeStyle = '#2E7D32';
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+                
+                // 绘制玩家眼睛（增加趣味性）
+                this.ctx.fillStyle = '#000';
+                this.ctx.beginPath();
+                this.ctx.arc(playerScreenX - 5, playerScreenY - 5, 3, 0, Math.PI * 2);
+                this.ctx.arc(playerScreenX + 5, playerScreenY - 5, 3, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                // 恢复上下文（UI 元素不需要相机变换）
+                this.ctx.restore();
+                
+                // 绘制 UI（屏幕坐标，不受相机影响）
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.font = 'bold 24px Arial';
+                this.ctx.fillText('分数: ' + Math.floor(this.score), 20, 40);
+                
+                // 显示位置信息
+                this.ctx.font = '16px Arial';
+                this.ctx.fillText('位置: ' + Math.floor(this.player.worldX) + ' / ' + this.worldWidth, 20, 70);
+                
+                // 绘制游戏结束提示
+                if (this.isGameOver) {
+                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                    this.ctx.fillRect(0, 0, this.width, this.height);
+                    this.ctx.fillStyle = '#ffffff';
+                    this.ctx.font = 'bold 48px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText('游戏结束', this.width / 2, this.height / 2 - 50);
+                    this.ctx.font = '24px Arial';
+                    this.ctx.fillText('最终分数: ' + Math.floor(this.score), this.width / 2, this.height / 2 + 20);
+                    this.ctx.fillText('按 R 键重新开始', this.width / 2, this.height / 2 + 60);
+                    this.ctx.textAlign = 'left';
+                }
+                
+                // 绘制操作提示
+                if (!this.isGameOver) {
+                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                    this.ctx.font = '16px Arial';
+                    this.ctx.fillText('WASD/方向键: 移动 | 空格/W: 跳跃', 20, this.height - 20);
+                }
+            }
+            
+            gameLoop() {
+                const self = this;
+                function loop() {
+                    self.update();
+                    self.render();
+                    requestAnimationFrame(loop);
+                }
+                loop();
+            }
+            
+            gameOver() {
+                this.isGameOver = true;
+            }
+        }
+        
+        // 启动游戏
+        window.addEventListener('load', function() {
+            try {
+                new Game();
+            } catch (error) {
+                console.error('游戏启动失败:', error);
+                const loading = document.getElementById('loading');
+                if (loading) {
+                    loading.textContent = '游戏加载失败: ' + error.message;
+                    loading.style.color = '#ff4444';
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+

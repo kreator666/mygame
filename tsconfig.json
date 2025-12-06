@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "module": "ES2015",
+    "lib": [
+      "ES2015",
+      "DOM"
+    ],
+    "target": "ES2015",
+    "experimentalDecorators": true,
+    "skipLibCheck": true,
+    "outDir": "temp/tsc",
+    "moduleResolution": "node",
+    "strict": false,
+    "esModuleInterop": true,
+    "skipDefaultLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "allowSyntheticDefaultImports": true,
+    "types": [
+      "cc"
+    ]
+  },
+  "include": [
+    "assets/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "library",
+    "local",
+    "temp",
+    "build"
+  ]
+}
+

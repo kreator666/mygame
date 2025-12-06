@@ -1,0 +1,9 @@
+{
+  "engine": "3.8.0",
+  "id": "mygame",
+  "isNew": false,
+  "readonly": false,
+  "renderPipeline": "forward",
+  "start-scene": "db://assets/scenes/Game.fire"
+}
+
