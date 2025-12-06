@@ -205,44 +205,41 @@
                     typeIndex++;
                 }
                 
-                // 添加一些悬浮平台（普通类型）
-                const floatingPlatforms = [
-                    { x: 500, y: groundY - 150, width: 150 },
-                    { x: 1200, y: groundY - 200, width: 200 },
-                    { x: 2000, y: groundY - 100, width: 180 },
-                    { x: 2800, y: groundY - 250, width: 150 },
-                    { x: 3500, y: groundY - 150, width: 200 },
-                    { x: 4200, y: groundY - 300, width: 180 }
-                ];
-                
-                floatingPlatforms.forEach(plat => {
-                    this.platforms.push({
-                        x: plat.x,
-                        y: plat.y,
-                        width: plat.width,
-                        height: 20,
-                        type: 'NORMAL',
-                        color: this.groundTypes.NORMAL.color,
-                        borderColor: this.groundTypes.NORMAL.borderColor,
-                        name: '悬浮平台'
-                    });
-                });
+                // 不再添加悬浮平台，空中场景由箱子和砖块组成
             }
             
             initInteractives() {
                 const groundY = this.height - 100;
                 
-                // 初始化箱子（可以碰撞掉落道具）
+                // 初始化箱子（地面和空中的箱子）
                 const boxPositions = [
+                    // 地面上的箱子
                     { x: 300, y: groundY - 40 },
                     { x: 800, y: groundY - 40 },
                     { x: 1500, y: groundY - 40 },
                     { x: 2200, y: groundY - 40 },
                     { x: 3000, y: groundY - 40 },
                     { x: 3800, y: groundY - 40 },
-                    { x: 600, y: groundY - 190 },  // 悬浮平台上的箱子
-                    { x: 1300, y: groundY - 240 },
-                    { x: 2900, y: groundY - 290 }
+                    // 空中的箱子（替代原来的悬浮平台）
+                    { x: 500, y: groundY - 150 },
+                    { x: 550, y: groundY - 150 },
+                    { x: 600, y: groundY - 150 },
+                    { x: 1200, y: groundY - 200 },
+                    { x: 1250, y: groundY - 200 },
+                    { x: 1300, y: groundY - 200 },
+                    { x: 1350, y: groundY - 200 },
+                    { x: 2000, y: groundY - 100 },
+                    { x: 2050, y: groundY - 100 },
+                    { x: 2100, y: groundY - 100 },
+                    { x: 2800, y: groundY - 250 },
+                    { x: 2850, y: groundY - 250 },
+                    { x: 2900, y: groundY - 250 },
+                    { x: 3500, y: groundY - 150 },
+                    { x: 3550, y: groundY - 150 },
+                    { x: 3600, y: groundY - 150 },
+                    { x: 4200, y: groundY - 300 },
+                    { x: 4250, y: groundY - 300 },
+                    { x: 4300, y: groundY - 300 }
                 ];
                 
                 boxPositions.forEach(pos => {
@@ -257,8 +254,9 @@
                     });
                 });
                 
-                // 初始化砖块（碰撞后会粉碎）
+                // 初始化砖块（地面和空中的砖块）
                 const brickPositions = [
+                    // 地面上的砖块
                     { x: 400, y: groundY - 40 },
                     { x: 900, y: groundY - 40 },
                     { x: 1100, y: groundY - 40 },
@@ -266,9 +264,15 @@
                     { x: 2300, y: groundY - 40 },
                     { x: 3100, y: groundY - 40 },
                     { x: 3900, y: groundY - 40 },
-                    { x: 700, y: groundY - 190 },
-                    { x: 1400, y: groundY - 240 },
-                    { x: 3000, y: groundY - 290 }
+                    // 空中的砖块（替代原来的悬浮平台）
+                    { x: 650, y: groundY - 150 },
+                    { x: 700, y: groundY - 150 },
+                    { x: 1400, y: groundY - 200 },
+                    { x: 1450, y: groundY - 200 },
+                    { x: 2150, y: groundY - 100 },
+                    { x: 2950, y: groundY - 250 },
+                    { x: 3650, y: groundY - 150 },
+                    { x: 4350, y: groundY - 300 }
                 ];
                 
                 brickPositions.forEach(pos => {
@@ -492,6 +496,43 @@
                     }
                 }
                 
+                // 检查箱子和砖块作为平台（让玩家可以站在上面）
+                // 先检查箱子
+                for (let box of this.boxes) {
+                    if (!box.broken && this.checkObjectCollision(this.player, box)) {
+                        const playerBottom = this.player.worldY + this.player.size;
+                        const boxTop = box.y;
+                        
+                        // 从上方落在箱子上（可以踩）
+                        if (this.player.velocityY >= 0 && 
+                            playerBottom >= boxTop - 5 && 
+                            playerBottom <= boxTop + 10) {
+                            this.player.worldY = boxTop - this.player.size;
+                            this.player.velocityY = 0;
+                            this.player.onGround = true;
+                            this.coyoteTimeCounter = this.coyoteTime;
+                        }
+                    }
+                }
+                
+                // 检查砖块
+                for (let brick of this.bricks) {
+                    if (!brick.broken && this.checkObjectCollision(this.player, brick)) {
+                        const playerBottom = this.player.worldY + this.player.size;
+                        const brickTop = brick.y;
+                        
+                        // 从上方落在砖块上（可以踩）
+                        if (this.player.velocityY >= 0 && 
+                            playerBottom >= brickTop - 5 && 
+                            playerBottom <= brickTop + 10) {
+                            this.player.worldY = brickTop - this.player.size;
+                            this.player.velocityY = 0;
+                            this.player.onGround = true;
+                            this.coyoteTimeCounter = this.coyoteTime;
+                        }
+                    }
+                }
+                
                 // 检查是否掉入空隙或掉出底部（死亡检测）
                 const groundY = this.height - 100;
                 
@@ -525,29 +566,43 @@
                 // 限制相机范围
                 this.camera.x = Math.max(0, Math.min(this.worldWidth - this.width, this.camera.x));
                 
-                // 检查与箱子的碰撞
+                // 检查与箱子的碰撞（只从下方撞击才触发效果）
                 for (let box of this.boxes) {
                     if (!box.broken && this.checkObjectCollision(this.player, box)) {
-                        // 从下方碰撞箱子（向上跳跃撞击）
+                        const playerTop = this.player.worldY - this.player.size;
                         const playerBottom = this.player.worldY + this.player.size;
                         const boxTop = box.y;
+                        const boxBottom = box.y + box.height;
                         
-                        if (this.player.velocityY < -1 && playerBottom < boxTop + 10) {
+                        // 只处理从下方撞击的情况（向上跳跃撞击）
+                        // 玩家在箱子下方，且向上移动，且玩家顶部接近或超过箱子底部
+                        if (playerBottom < boxTop + 10 && 
+                            this.player.velocityY < -1 && 
+                            playerTop < boxBottom) {
                             box.broken = true;
                             // 生成道具（枪）
                             this.spawnItem(box.x + box.width / 2, box.y);
                             // 给玩家一点向上的力
                             this.player.velocityY = -2;
                         }
+                        // 从上方落下的情况已经在前面处理了（可以踩）
                     }
                 }
                 
-                // 检查与砖块的碰撞
+                // 检查与砖块的碰撞（只从下方撞击才触发效果）
                 for (let i = this.bricks.length - 1; i >= 0; i--) {
                     const brick = this.bricks[i];
                     if (!brick.broken && this.checkObjectCollision(this.player, brick)) {
-                        // 从下方碰撞砖块（向上跳跃撞击）
-                        if (this.player.velocityY < -2) {
+                        const playerTop = this.player.worldY - this.player.size;
+                        const playerBottom = this.player.worldY + this.player.size;
+                        const brickTop = brick.y;
+                        const brickBottom = brick.y + brick.height;
+                        
+                        // 只处理从下方撞击的情况（向上跳跃撞击）
+                        // 玩家在砖块下方，且向上移动，且玩家顶部接近或超过砖块底部
+                        if (playerBottom < brickTop + 10 && 
+                            this.player.velocityY < -1 && 
+                            playerTop < brickBottom) {
                             brick.broken = true;
                             // 创建粉碎粒子效果
                             this.createParticles(brick.x, brick.y, 12);
@@ -556,6 +611,7 @@
                             // 给玩家一点向上的力
                             this.player.velocityY = -3;
                         }
+                        // 从上方落下的情况已经在前面处理了（可以踩）
                     }
                 }
                 
