@@ -31,11 +31,100 @@
             transform: translate(-50%, -50%);
             z-index: 10;
         }
+        #controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 20px;
+            border-radius: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.8;
+            z-index: 100;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            min-width: 200px;
+        }
+        #controls h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #4CAF50;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+            padding-bottom: 8px;
+        }
+        #controls .control-item {
+            margin: 8px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #controls .key {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            min-width: 60px;
+            text-align: center;
+        }
+        #controls .action {
+            flex: 1;
+            margin-left: 10px;
+        }
+        #controls-toggle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            z-index: 101;
+        }
+        #controls-toggle:hover {
+            background: rgba(0, 0, 0, 0.7);
+        }
     </style>
 </head>
 <body>
     <div id="loading">正在加载游戏...</div>
     <canvas id="GameCanvas"></canvas>
+    
+    <!-- 操作提示面板 -->
+    <div id="controls">
+        <h3>🎮 操作说明</h3>
+        <div class="control-item">
+            <span class="key">A / ←</span>
+            <span class="action">向左移动</span>
+        </div>
+        <div class="control-item">
+            <span class="key">D / →</span>
+            <span class="action">向右移动</span>
+        </div>
+        <div class="control-item">
+            <span class="key">W / ↑</span>
+            <span class="action">跳跃</span>
+        </div>
+        <div class="control-item">
+            <span class="key">空格</span>
+            <span class="action">跳跃</span>
+        </div>
+        <div class="control-item">
+            <span class="key">R</span>
+            <span class="action">重新开始</span>
+        </div>
+        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.3); font-size: 12px; color: #aaa; text-align: center;">
+            横向卷轴游戏
+        </div>
+    </div>
+    
+    <button id="controls-toggle" onclick="toggleControls()">隐藏提示</button>
     
     <script>
         // 游戏主入口 - 横向卷轴场景
@@ -56,37 +145,74 @@
                 };
                 this.cameraFollowZone = 150;  // 相机跟随区域（玩家超出此范围时相机开始移动）
                 
+                // 地面类型定义
+                this.groundTypes = {
+                    NORMAL: { name: '普通', color: '#8B4513', borderColor: '#654321' },
+                    SNOW: { name: '雪地', color: '#F0F8FF', borderColor: '#E0E0E0' },
+                    GRASS: { name: '草地', color: '#90EE90', borderColor: '#228B22' },
+                    MUD: { name: '泥地', color: '#8B7355', borderColor: '#6B5740' }
+                };
+                
                 // 平台和障碍物
                 this.platforms = [];
                 this.initPlatforms();
+                
+                // 可交互物体
+                this.boxes = [];  // 箱子
+                this.bricks = [];  // 砖块
+                this.items = [];   // 道具（枪等）
+                this.particles = [];  // 粒子效果（用于砖块粉碎）
+                this.initInteractives();
+                
+                // 死亡检测
+                this.deathY = this.height + 100;  // 掉出此高度即死亡
                 
                 this.init();
             }
             
             initPlatforms() {
-                // 创建一些平台来展示卷轴效果
                 const platformHeight = 30;
                 const groundY = this.height - 100;
+                const types = Object.keys(this.groundTypes);
                 
-                // 地面平台
-                for (let x = 0; x < this.worldWidth; x += 200) {
+                // 创建有间隙的地面，分成4种类型
+                let currentX = 0;
+                let typeIndex = 0;
+                
+                while (currentX < this.worldWidth) {
+                    const type = types[typeIndex % types.length];
+                    const groundType = this.groundTypes[type];
+                    
+                    // 随机决定平台宽度（150-250像素）
+                    const platformWidth = 150 + Math.random() * 100;
+                    
+                    // 随机决定间隙（0-100像素，但不会连续两个都是大间隙）
+                    const gap = Math.random() < 0.3 ? 50 + Math.random() * 50 : 0;
+                    
+                    // 添加地面平台
                     this.platforms.push({
-                        x: x,
+                        x: currentX,
                         y: groundY,
-                        width: 180,
+                        width: platformWidth,
                         height: platformHeight,
-                        color: '#8B4513'
+                        type: type,
+                        color: groundType.color,
+                        borderColor: groundType.borderColor,
+                        name: groundType.name
                     });
+                    
+                    currentX += platformWidth + gap;
+                    typeIndex++;
                 }
                 
-                // 添加一些悬浮平台
+                // 添加一些悬浮平台（普通类型）
                 const floatingPlatforms = [
-                    { x: 500, y: groundY - 150, width: 150, height: 20 },
-                    { x: 1200, y: groundY - 200, width: 200, height: 20 },
-                    { x: 2000, y: groundY - 100, width: 180, height: 20 },
-                    { x: 2800, y: groundY - 250, width: 150, height: 20 },
-                    { x: 3500, y: groundY - 150, width: 200, height: 20 },
-                    { x: 4200, y: groundY - 300, width: 180, height: 20 }
+                    { x: 500, y: groundY - 150, width: 150 },
+                    { x: 1200, y: groundY - 200, width: 200 },
+                    { x: 2000, y: groundY - 100, width: 180 },
+                    { x: 2800, y: groundY - 250, width: 150 },
+                    { x: 3500, y: groundY - 150, width: 200 },
+                    { x: 4200, y: groundY - 300, width: 180 }
                 ];
                 
                 floatingPlatforms.forEach(plat => {
@@ -94,8 +220,66 @@
                         x: plat.x,
                         y: plat.y,
                         width: plat.width,
-                        height: plat.height,
-                        color: '#654321'
+                        height: 20,
+                        type: 'NORMAL',
+                        color: this.groundTypes.NORMAL.color,
+                        borderColor: this.groundTypes.NORMAL.borderColor,
+                        name: '悬浮平台'
+                    });
+                });
+            }
+            
+            initInteractives() {
+                const groundY = this.height - 100;
+                
+                // 初始化箱子（可以碰撞掉落道具）
+                const boxPositions = [
+                    { x: 300, y: groundY - 40 },
+                    { x: 800, y: groundY - 40 },
+                    { x: 1500, y: groundY - 40 },
+                    { x: 2200, y: groundY - 40 },
+                    { x: 3000, y: groundY - 40 },
+                    { x: 3800, y: groundY - 40 },
+                    { x: 600, y: groundY - 190 },  // 悬浮平台上的箱子
+                    { x: 1300, y: groundY - 240 },
+                    { x: 2900, y: groundY - 290 }
+                ];
+                
+                boxPositions.forEach(pos => {
+                    this.boxes.push({
+                        x: pos.x,
+                        y: pos.y,
+                        width: 40,
+                        height: 40,
+                        broken: false,
+                        color: '#8B4513',
+                        borderColor: '#654321'
+                    });
+                });
+                
+                // 初始化砖块（碰撞后会粉碎）
+                const brickPositions = [
+                    { x: 400, y: groundY - 40 },
+                    { x: 900, y: groundY - 40 },
+                    { x: 1100, y: groundY - 40 },
+                    { x: 1600, y: groundY - 40 },
+                    { x: 2300, y: groundY - 40 },
+                    { x: 3100, y: groundY - 40 },
+                    { x: 3900, y: groundY - 40 },
+                    { x: 700, y: groundY - 190 },
+                    { x: 1400, y: groundY - 240 },
+                    { x: 3000, y: groundY - 290 }
+                ];
+                
+                brickPositions.forEach(pos => {
+                    this.bricks.push({
+                        x: pos.x,
+                        y: pos.y,
+                        width: 40,
+                        height: 40,
+                        broken: false,
+                        color: '#696969',
+                        borderColor: '#555555'
                     });
                 });
             }
@@ -116,15 +300,19 @@
                     worldX: 100,  // 世界坐标 X
                     worldY: this.height - 150,  // 世界坐标 Y
                     size: 20,
-                    speed: 5,
+                    speed: 2.5,  // 降低移动速度，使移动更平滑
                     color: '#4CAF50',
                     velocityY: 0,  // 垂直速度（用于重力）
-                    onGround: false
+                    onGround: false,
+                    hasGun: false  // 是否拥有枪
                 };
                 
-                // 重力设置
-                this.gravity = 0.5;
-                this.jumpPower = -12;
+                // 重力设置（优化为更平滑的跳跃）
+                this.gravity = 0.35;  // 降低重力，使跳跃更平滑
+                this.jumpPower = -10;  // 调整跳跃力度
+                this.maxFallSpeed = 12;  // 最大下落速度，防止下落过快
+                this.coyoteTime = 0.15;  // 土狼时间：离开平台后仍可短暂跳跃（秒）
+                this.coyoteTimeCounter = 0;  // 土狼时间计数器
                 
                 // 初始化按键状态
                 this.keys = {};
@@ -149,10 +337,13 @@
                     if (key === 'arrowup') self.keys['w'] = true;
                     if (key === 'arrowdown') self.keys['s'] = true;
                     
-                    // 跳跃（空格键或 W）
-                    if ((key === ' ' || key === 'w' || key === 'arrowup') && self.player.onGround) {
-                        self.player.velocityY = self.jumpPower;
-                        self.player.onGround = false;
+                    // 跳跃（空格键或 W）- 支持土狼时间
+                    if (key === ' ' || key === 'w' || key === 'arrowup') {
+                        if (self.player.onGround || self.coyoteTimeCounter > 0) {
+                            self.player.velocityY = self.jumpPower;
+                            self.player.onGround = false;
+                            self.coyoteTimeCounter = 0;  // 使用后重置
+                        }
                     }
                 });
                 
@@ -181,6 +372,64 @@
                        player.worldY - player.size < platform.y + platform.height;
             }
             
+            // 检查与物体的碰撞（箱子和砖块）
+            checkObjectCollision(player, obj) {
+                return player.worldX + player.size > obj.x &&
+                       player.worldX - player.size < obj.x + obj.width &&
+                       player.worldY + player.size > obj.y &&
+                       player.worldY - player.size < obj.y + obj.height;
+            }
+            
+            // 创建粒子效果（用于砖块粉碎）
+            createParticles(x, y, count = 8) {
+                for (let i = 0; i < count; i++) {
+                    this.particles.push({
+                        x: x + 20,
+                        y: y + 20,
+                        vx: (Math.random() - 0.5) * 8,
+                        vy: (Math.random() - 0.5) * 8 - 2,
+                        life: 30,  // 粒子存活帧数
+                        maxLife: 30,
+                        size: 3 + Math.random() * 3,
+                        color: '#696969'
+                    });
+                }
+            }
+            
+            // 生成道具（枪）
+            spawnItem(x, y) {
+                this.items.push({
+                    x: x,
+                    y: y,
+                    width: 30,
+                    height: 20,
+                    type: 'gun',
+                    collected: false,
+                    bounce: 0,
+                    bounceSpeed: 0.1
+                });
+            }
+            
+            // 检查玩家是否站在地面上
+            checkPlayerOnGround() {
+                const playerBottom = this.player.worldY + this.player.size;
+                const playerCenterX = this.player.worldX;
+                
+                // 检查玩家下方是否有平台（玩家站在平台上）
+                for (let platform of this.platforms) {
+                    // 检查玩家X坐标是否在平台范围内
+                    if (playerCenterX >= platform.x && playerCenterX <= platform.x + platform.width) {
+                        // 检查玩家底部是否刚好在平台顶部
+                        const platformTop = platform.y;
+                        if (playerBottom >= platformTop - 5 && playerBottom <= platformTop + 10) {
+                            return true;
+                        }
+                    }
+                }
+                
+                return false;
+            }
+            
             update() {
                 if (this.isGameOver) return;
                 
@@ -195,20 +444,44 @@
                 // 世界边界检测
                 this.player.worldX = Math.max(this.player.size, Math.min(this.worldWidth - this.player.size, this.player.worldX));
                 
-                // 应用重力
+                // 应用重力（更平滑的物理效果）
                 this.player.velocityY += this.gravity;
+                
+                // 限制最大下落速度，使跳跃更平滑
+                if (this.player.velocityY > this.maxFallSpeed) {
+                    this.player.velocityY = this.maxFallSpeed;
+                }
+                
                 this.player.worldY += this.player.velocityY;
                 
-                // 检查平台碰撞
+                // 更新土狼时间（基于帧率，假设60fps）
+                if (this.player.onGround) {
+                    this.coyoteTimeCounter = this.coyoteTime;
+                } else {
+                    this.coyoteTimeCounter -= 1/60;  // 每帧减少
+                    if (this.coyoteTimeCounter < 0) {
+                        this.coyoteTimeCounter = 0;
+                    }
+                }
+                
+                // 检查平台碰撞（优化碰撞检测，使落地更平滑）
                 this.player.onGround = false;
                 for (let platform of this.platforms) {
                     if (this.checkCollision(this.player, platform)) {
                         // 从上方落在平台上
-                        if (this.player.velocityY > 0 && 
-                            this.player.worldY - this.player.size < platform.y) {
-                            this.player.worldY = platform.y - this.player.size;
-                            this.player.velocityY = 0;
+                        if (this.player.velocityY >= 0 && 
+                            this.player.worldY - this.player.size <= platform.y + 5) {
+                            // 平滑落地：如果速度不太快，可以稍微调整位置
+                            if (this.player.velocityY < 3) {
+                                this.player.worldY = platform.y - this.player.size;
+                                this.player.velocityY = 0;
+                            } else {
+                                // 快速下落时正常处理
+                                this.player.worldY = platform.y - this.player.size;
+                                this.player.velocityY *= 0.3;  // 落地时减少反弹
+                            }
                             this.player.onGround = true;
+                            this.coyoteTimeCounter = this.coyoteTime;  // 重置土狼时间
                         }
                         // 从下方碰撞
                         else if (this.player.velocityY < 0 && 
@@ -219,12 +492,23 @@
                     }
                 }
                 
-                // 防止掉出世界底部
-                if (this.player.worldY > this.height + 200) {
-                    this.player.worldY = this.height - 150;
-                    this.player.velocityY = 0;
-                    this.player.worldX = 100;
-                    this.camera.x = 0;
+                // 检查是否掉入空隙或掉出底部（死亡检测）
+                const groundY = this.height - 100;
+                
+                if (this.player.worldY > this.deathY) {
+                    this.gameOver();
+                    return;
+                }
+                
+                // 检查是否掉入地面空隙
+                const playerOnGround = this.checkPlayerOnGround();
+                if (!playerOnGround && this.player.worldY > groundY + 50) {
+                    // 玩家在空隙中且持续下落
+                    if (this.player.velocityY > 5) {
+                        // 下落速度过快，判定为掉入空隙
+                        this.gameOver();
+                        return;
+                    }
                 }
                 
                 // 更新相机位置（跟随玩家）
@@ -240,6 +524,73 @@
                 
                 // 限制相机范围
                 this.camera.x = Math.max(0, Math.min(this.worldWidth - this.width, this.camera.x));
+                
+                // 检查与箱子的碰撞
+                for (let box of this.boxes) {
+                    if (!box.broken && this.checkObjectCollision(this.player, box)) {
+                        // 从下方碰撞箱子（向上跳跃撞击）
+                        const playerBottom = this.player.worldY + this.player.size;
+                        const boxTop = box.y;
+                        
+                        if (this.player.velocityY < -1 && playerBottom < boxTop + 10) {
+                            box.broken = true;
+                            // 生成道具（枪）
+                            this.spawnItem(box.x + box.width / 2, box.y);
+                            // 给玩家一点向上的力
+                            this.player.velocityY = -2;
+                        }
+                    }
+                }
+                
+                // 检查与砖块的碰撞
+                for (let i = this.bricks.length - 1; i >= 0; i--) {
+                    const brick = this.bricks[i];
+                    if (!brick.broken && this.checkObjectCollision(this.player, brick)) {
+                        // 从下方碰撞砖块（向上跳跃撞击）
+                        if (this.player.velocityY < -2) {
+                            brick.broken = true;
+                            // 创建粉碎粒子效果
+                            this.createParticles(brick.x, brick.y, 12);
+                            // 移除砖块
+                            this.bricks.splice(i, 1);
+                            // 给玩家一点向上的力
+                            this.player.velocityY = -3;
+                        }
+                    }
+                }
+                
+                // 更新道具
+                for (let item of this.items) {
+                    if (!item.collected) {
+                        // 道具弹跳动画
+                        item.bounce += item.bounceSpeed;
+                        if (item.bounce > Math.PI * 2) item.bounce = 0;
+                        
+                        // 检查玩家是否收集道具
+                        if (this.checkObjectCollision(this.player, item)) {
+                            item.collected = true;
+                            if (item.type === 'gun') {
+                                this.player.hasGun = true;
+                            }
+                        }
+                    }
+                }
+                
+                // 更新粒子
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const particle = this.particles[i];
+                    particle.x += particle.vx;
+                    particle.y += particle.vy;
+                    particle.vy += 0.3;  // 重力
+                    particle.life--;
+                    
+                    if (particle.life <= 0) {
+                        this.particles.splice(i, 1);
+                    }
+                }
+                
+                // 移除已收集的道具
+                this.items = this.items.filter(item => !item.collected);
                 
                 // 增加分数（基于移动距离）
                 this.score += 0.1;
@@ -277,18 +628,134 @@
                     this.ctx.stroke();
                 }
                 
-                // 绘制平台
+                // 绘制平台（根据类型显示不同颜色和样式）
                 for (let platform of this.platforms) {
                     // 只绘制在视野内的平台
                     if (platform.x + platform.width > this.camera.x && 
                         platform.x < this.camera.x + this.width) {
+                        
+                        // 根据类型绘制不同的地面
                         this.ctx.fillStyle = platform.color;
                         this.ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
                         
                         // 平台边框
-                        this.ctx.strokeStyle = '#654321';
+                        this.ctx.strokeStyle = platform.borderColor || '#654321';
                         this.ctx.lineWidth = 2;
                         this.ctx.strokeRect(platform.x, platform.y, platform.width, platform.height);
+                        
+                        // 为不同类型的地面添加特殊效果
+                        if (platform.type === 'SNOW') {
+                            // 雪地：添加雪花效果
+                            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                            for (let i = 0; i < 3; i++) {
+                                const x = platform.x + Math.random() * platform.width;
+                                const y = platform.y + Math.random() * platform.height;
+                                this.ctx.beginPath();
+                                this.ctx.arc(x, y, 2, 0, Math.PI * 2);
+                                this.ctx.fill();
+                            }
+                        } else if (platform.type === 'GRASS') {
+                            // 草地：添加草的效果
+                            this.ctx.strokeStyle = '#228B22';
+                            this.ctx.lineWidth = 1;
+                            for (let i = 0; i < 5; i++) {
+                                const x = platform.x + (i + 1) * (platform.width / 6);
+                                this.ctx.beginPath();
+                                this.ctx.moveTo(x, platform.y);
+                                this.ctx.lineTo(x - 3, platform.y - 5);
+                                this.ctx.lineTo(x + 3, platform.y - 5);
+                                this.ctx.lineTo(x, platform.y);
+                                this.ctx.stroke();
+                            }
+                        } else if (platform.type === 'MUD') {
+                            // 泥地：添加泥点效果
+                            this.ctx.fillStyle = '#6B5740';
+                            for (let i = 0; i < 4; i++) {
+                                const x = platform.x + Math.random() * platform.width;
+                                const y = platform.y + Math.random() * platform.height;
+                                this.ctx.beginPath();
+                                this.ctx.arc(x, y, 3, 0, Math.PI * 2);
+                                this.ctx.fill();
+                            }
+                        }
+                    }
+                }
+                
+                // 绘制箱子
+                for (let box of this.boxes) {
+                    if (box.x + box.width > this.camera.x && box.x < this.camera.x + this.width) {
+                        if (!box.broken) {
+                            // 绘制箱子
+                            this.ctx.fillStyle = box.color;
+                            this.ctx.fillRect(box.x, box.y, box.width, box.height);
+                            this.ctx.strokeStyle = box.borderColor;
+                            this.ctx.lineWidth = 2;
+                            this.ctx.strokeRect(box.x, box.y, box.width, box.height);
+                            
+                            // 绘制箱子上的"X"标记
+                            this.ctx.strokeStyle = '#654321';
+                            this.ctx.lineWidth = 2;
+                            this.ctx.beginPath();
+                            this.ctx.moveTo(box.x + 8, box.y + 8);
+                            this.ctx.lineTo(box.x + box.width - 8, box.y + box.height - 8);
+                            this.ctx.moveTo(box.x + box.width - 8, box.y + 8);
+                            this.ctx.lineTo(box.x + 8, box.y + box.height - 8);
+                            this.ctx.stroke();
+                        }
+                    }
+                }
+                
+                // 绘制砖块
+                for (let brick of this.bricks) {
+                    if (brick.x + brick.width > this.camera.x && brick.x < this.camera.x + this.width) {
+                        // 绘制砖块
+                        this.ctx.fillStyle = brick.color;
+                        this.ctx.fillRect(brick.x, brick.y, brick.width, brick.height);
+                        this.ctx.strokeStyle = brick.borderColor;
+                        this.ctx.lineWidth = 2;
+                        this.ctx.strokeRect(brick.x, brick.y, brick.width, brick.height);
+                        
+                        // 绘制砖块纹理
+                        this.ctx.strokeStyle = '#555555';
+                        this.ctx.lineWidth = 1;
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(brick.x + brick.width / 2, brick.y);
+                        this.ctx.lineTo(brick.x + brick.width / 2, brick.y + brick.height);
+                        this.ctx.stroke();
+                    }
+                }
+                
+                // 绘制道具（枪）
+                for (let item of this.items) {
+                    if (!item.collected && item.x + item.width > this.camera.x && item.x < this.camera.x + this.width) {
+                        const bounceY = Math.sin(item.bounce) * 5;
+                        
+                        // 绘制枪
+                        this.ctx.fillStyle = '#2C2C2C';
+                        this.ctx.fillRect(item.x, item.y + bounceY, item.width, item.height);
+                        
+                        // 枪的细节
+                        this.ctx.fillStyle = '#1a1a1a';
+                        this.ctx.fillRect(item.x + 5, item.y + bounceY + 5, 20, 10);
+                        
+                        // 枪口
+                        this.ctx.fillStyle = '#444444';
+                        this.ctx.beginPath();
+                        this.ctx.arc(item.x + item.width, item.y + bounceY + item.height / 2, 4, 0, Math.PI * 2);
+                        this.ctx.fill();
+                    }
+                }
+                
+                // 绘制粒子效果（砖块粉碎）
+                for (let particle of this.particles) {
+                    if (particle.x > this.camera.x && particle.x < this.camera.x + this.width) {
+                        const alpha = particle.life / particle.maxLife;
+                        this.ctx.fillStyle = particle.color;
+                        this.ctx.globalAlpha = alpha;
+                        this.ctx.beginPath();
+                        this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                        this.ctx.fill();
+                        this.ctx.globalAlpha = 1;
                     }
                 }
                 
@@ -325,26 +792,42 @@
                 this.ctx.font = '16px Arial';
                 this.ctx.fillText('位置: ' + Math.floor(this.player.worldX) + ' / ' + this.worldWidth, 20, 70);
                 
+                // 显示道具（枪）
+                if (this.player.hasGun) {
+                    this.ctx.fillStyle = '#FFD700';
+                    this.ctx.font = 'bold 18px Arial';
+                    this.ctx.fillText('🔫 已获得武器', 20, 100);
+                }
+                
                 // 绘制游戏结束提示
                 if (this.isGameOver) {
-                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
                     this.ctx.fillRect(0, 0, this.width, this.height);
-                    this.ctx.fillStyle = '#ffffff';
-                    this.ctx.font = 'bold 48px Arial';
+                    
+                    // GAME OVER 大标题
+                    this.ctx.fillStyle = '#ff4444';
+                    this.ctx.font = 'bold 72px Arial';
                     this.ctx.textAlign = 'center';
-                    this.ctx.fillText('游戏结束', this.width / 2, this.height / 2 - 50);
+                    this.ctx.strokeStyle = '#000';
+                    this.ctx.lineWidth = 4;
+                    this.ctx.strokeText('GAME OVER', this.width / 2, this.height / 2 - 80);
+                    this.ctx.fillText('GAME OVER', this.width / 2, this.height / 2 - 80);
+                    
+                    // 死亡原因
+                    this.ctx.fillStyle = '#ffaaaa';
                     this.ctx.font = '24px Arial';
-                    this.ctx.fillText('最终分数: ' + Math.floor(this.score), this.width / 2, this.height / 2 + 20);
-                    this.ctx.fillText('按 R 键重新开始', this.width / 2, this.height / 2 + 60);
+                    this.ctx.fillText('你掉入了空隙！', this.width / 2, this.height / 2 - 20);
+                    
+                    // 分数和重新开始提示
+                    this.ctx.fillStyle = '#ffffff';
+                    this.ctx.font = 'bold 28px Arial';
+                    this.ctx.fillText('最终分数: ' + Math.floor(this.score), this.width / 2, this.height / 2 + 40);
+                    this.ctx.font = '20px Arial';
+                    this.ctx.fillText('按 R 键重新开始', this.width / 2, this.height / 2 + 80);
                     this.ctx.textAlign = 'left';
                 }
                 
-                // 绘制操作提示
-                if (!this.isGameOver) {
-                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-                    this.ctx.font = '16px Arial';
-                    this.ctx.fillText('WASD/方向键: 移动 | 空格/W: 跳跃', 20, this.height - 20);
-                }
+                // 操作提示已移至 HTML 面板，这里不再绘制
             }
             
             gameLoop() {
@@ -359,6 +842,19 @@
             
             gameOver() {
                 this.isGameOver = true;
+            }
+        }
+        
+        // 切换操作提示显示/隐藏
+        function toggleControls() {
+            const controls = document.getElementById('controls');
+            const toggle = document.getElementById('controls-toggle');
+            if (controls.style.display === 'none') {
+                controls.style.display = 'block';
+                toggle.textContent = '隐藏提示';
+            } else {
+                controls.style.display = 'none';
+                toggle.textContent = '显示提示';
             }
         }
         
