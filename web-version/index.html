@@ -249,6 +249,7 @@
                         width: 40,
                         height: 40,
                         broken: false,
+                        interactive: true,  // 标识为可交互物体
                         color: '#8B4513',
                         borderColor: '#654321'
                     });
@@ -282,6 +283,7 @@
                         width: 40,
                         height: 40,
                         broken: false,
+                        interactive: true,  // 标识为可交互物体
                         color: '#696969',
                         borderColor: '#555555'
                     });
@@ -497,9 +499,10 @@
                 }
                 
                 // 检查箱子和砖块作为平台（让玩家可以站在上面）
+                // 只有可交互的物体才能被踩
                 // 先检查箱子
                 for (let box of this.boxes) {
-                    if (!box.broken && this.checkObjectCollision(this.player, box)) {
+                    if (!box.broken && box.interactive && this.checkObjectCollision(this.player, box)) {
                         const playerBottom = this.player.worldY + this.player.size;
                         const boxTop = box.y;
                         
@@ -517,7 +520,7 @@
                 
                 // 检查砖块
                 for (let brick of this.bricks) {
-                    if (!brick.broken && this.checkObjectCollision(this.player, brick)) {
+                    if (!brick.broken && brick.interactive && this.checkObjectCollision(this.player, brick)) {
                         const playerBottom = this.player.worldY + this.player.size;
                         const brickTop = brick.y;
                         
@@ -567,18 +570,27 @@
                 this.camera.x = Math.max(0, Math.min(this.worldWidth - this.width, this.camera.x));
                 
                 // 检查与箱子的碰撞（只从下方撞击才触发效果）
+                // 优化：只要玩家顶部碰到箱子底部边缘就判定为碰撞
+                // 只有可交互的箱子才能被撞击
                 for (let box of this.boxes) {
-                    if (!box.broken && this.checkObjectCollision(this.player, box)) {
+                    if (!box.broken && box.interactive) {
                         const playerTop = this.player.worldY - this.player.size;
                         const playerBottom = this.player.worldY + this.player.size;
+                        const playerLeft = this.player.worldX - this.player.size;
+                        const playerRight = this.player.worldX + this.player.size;
                         const boxTop = box.y;
                         const boxBottom = box.y + box.height;
+                        const boxLeft = box.x;
+                        const boxRight = box.x + box.width;
                         
-                        // 只处理从下方撞击的情况（向上跳跃撞击）
-                        // 玩家在箱子下方，且向上移动，且玩家顶部接近或超过箱子底部
-                        if (playerBottom < boxTop + 10 && 
-                            this.player.velocityY < -1 && 
-                            playerTop < boxBottom) {
+                        // 检查玩家是否在箱子的水平范围内（X轴重叠）
+                        const horizontalOverlap = playerRight > boxLeft && playerLeft < boxRight;
+                        
+                        // 检查从下方撞击：玩家在箱子下方，向上移动，且玩家顶部接近或碰到箱子底部边缘
+                        if (horizontalOverlap && 
+                            playerBottom < boxTop &&  // 玩家在箱子下方
+                            playerTop >= boxTop - 15 &&  // 玩家顶部接近箱子底部边缘（15像素容差）
+                            this.player.velocityY < 0) {  // 向上移动
                             box.broken = true;
                             // 生成道具（枪）
                             this.spawnItem(box.x + box.width / 2, box.y);
@@ -590,19 +602,28 @@
                 }
                 
                 // 检查与砖块的碰撞（只从下方撞击才触发效果）
+                // 优化：只要玩家顶部碰到砖块底部边缘就判定为碰撞
+                // 只有可交互的砖块才能被撞击
                 for (let i = this.bricks.length - 1; i >= 0; i--) {
                     const brick = this.bricks[i];
-                    if (!brick.broken && this.checkObjectCollision(this.player, brick)) {
+                    if (!brick.broken && brick.interactive) {
                         const playerTop = this.player.worldY - this.player.size;
                         const playerBottom = this.player.worldY + this.player.size;
+                        const playerLeft = this.player.worldX - this.player.size;
+                        const playerRight = this.player.worldX + this.player.size;
                         const brickTop = brick.y;
                         const brickBottom = brick.y + brick.height;
+                        const brickLeft = brick.x;
+                        const brickRight = brick.x + brick.width;
                         
-                        // 只处理从下方撞击的情况（向上跳跃撞击）
-                        // 玩家在砖块下方，且向上移动，且玩家顶部接近或超过砖块底部
-                        if (playerBottom < brickTop + 10 && 
-                            this.player.velocityY < -1 && 
-                            playerTop < brickBottom) {
+                        // 检查玩家是否在砖块的水平范围内（X轴重叠）
+                        const horizontalOverlap = playerRight > brickLeft && playerLeft < brickRight;
+                        
+                        // 检查从下方撞击：玩家在砖块下方，向上移动，且玩家顶部接近或碰到砖块底部边缘
+                        if (horizontalOverlap && 
+                            playerBottom < brickTop &&  // 玩家在砖块下方
+                            playerTop >= brickTop - 15 &&  // 玩家顶部接近砖块底部边缘（15像素容差）
+                            this.player.velocityY < 0) {  // 向上移动
                             brick.broken = true;
                             // 创建粉碎粒子效果
                             this.createParticles(brick.x, brick.y, 12);
